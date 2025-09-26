@@ -20,6 +20,7 @@ type FileTreeProps = {
   onSelectionChange?: (sel: Selection) => void;
   onSelectFile: (id: string) => void;
   onRenameFile: (id: string, newName: string) => void;
+  onMoveFile: (id: string, dir: string) => void;
   onDeleteFile: (id: string) => void;
   onCreateFile: (dir: string, name: string) => string | void;
   onCreateFolder: (parentDir: string, name: string) => void;
@@ -286,6 +287,7 @@ export function FileTree(props: FileTreeProps) {
           menuSel={menuSel}
           editing={editing}
           editText={editText}
+          folders={props.folders}
           onSelectFolder={(dir) => {
             setMenuSel(null);
             setSelected({ kind: 'folder', dir });
@@ -306,6 +308,7 @@ export function FileTree(props: FileTreeProps) {
           onCancelEditing={cancelEdit}
           onRequestMenu={(sel) => setMenuSel(sel)}
           onCloseMenu={() => setMenuSel(null)}
+          onMoveFile={props.onMoveFile}
           onDeleteFile={props.onDeleteFile}
           onDeleteFolder={props.onDeleteFolder}
         />
@@ -323,6 +326,7 @@ function Row(props: {
   menuSel: Selection;
   editing: Selection;
   editText: string;
+  folders: string[];
   onSelectFolder: (dir: string) => void;
   onSelectFile: (id: string) => void;
   onToggleFolder: (dir: string) => void;
@@ -333,6 +337,7 @@ function Row(props: {
   onCancelEditing: () => void;
   onRequestMenu: (sel: Selection) => void;
   onCloseMenu: () => void;
+  onMoveFile: (id: string, dir: string) => void;
   onDeleteFile: (id: string) => void;
   onDeleteFolder: (dir: string) => void;
 }) {
@@ -434,27 +439,29 @@ function Row(props: {
           )}
           {isMenuHere && (
             <div className="tree-menu" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="btn small subtle"
-                onClick={() => {
-                  const name = node.name || '';
-                  props.onStartEdit({ kind: 'folder', dir: node.dir }, name);
-                  props.onCloseMenu();
-                }}
-              >
-                Rename
-              </button>
-              {node.dir !== '' && (
+              <div className="tree-menu-actions">
                 <button
-                  className="btn small subtle danger"
+                  className="btn small subtle"
                   onClick={() => {
-                    props.onDeleteFolder(node.dir);
+                    const name = node.name || '';
+                    props.onStartEdit({ kind: 'folder', dir: node.dir }, name);
                     props.onCloseMenu();
                   }}
                 >
-                  Delete
+                  Rename
                 </button>
-              )}
+                {node.dir !== '' && (
+                  <button
+                    className="btn small subtle danger"
+                    onClick={() => {
+                      props.onDeleteFolder(node.dir);
+                      props.onCloseMenu();
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -502,6 +509,7 @@ function Row(props: {
               menuSel={props.menuSel}
               editing={props.editing}
               editText={props.editText}
+              folders={props.folders}
               onSelectFolder={props.onSelectFolder}
               onSelectFile={props.onSelectFile}
               onToggleFolder={props.onToggleFolder}
@@ -512,6 +520,7 @@ function Row(props: {
               onCancelEditing={props.onCancelEditing}
               onRequestMenu={props.onRequestMenu}
               onCloseMenu={props.onCloseMenu}
+              onMoveFile={props.onMoveFile}
               onDeleteFile={props.onDeleteFile}
               onDeleteFolder={props.onDeleteFolder}
             />
@@ -564,28 +573,66 @@ function Row(props: {
       )}
       {isMenuHere && (
         <div className="tree-menu" onClick={(e) => e.stopPropagation()}>
-          <button
-            className="btn small subtle"
-            onClick={() => {
-              props.onStartEdit({ kind: 'file', id: node.id }, node.name);
-              props.onCloseMenu();
-            }}
-          >
-            Rename
-          </button>
-          <button
-            className="btn small subtle danger"
-            onClick={() => {
-              props.onDeleteFile(node.id);
-              props.onCloseMenu();
-            }}
-          >
-            Delete
-          </button>
+          <div className="tree-menu-actions">
+            <button
+              className="btn small subtle"
+              onClick={() => {
+                props.onStartEdit({ kind: 'file', id: node.id }, node.name);
+                props.onCloseMenu();
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="btn small subtle danger"
+              onClick={() => {
+                props.onDeleteFile(node.id);
+                props.onCloseMenu();
+              }}
+            >
+              Delete
+            </button>
+          </div>
+          <div className="tree-menu-move">
+            <label className="tree-menu-label" htmlFor={`move-${node.id}`}>
+              Move to
+            </label>
+            <select
+              id={`move-${node.id}`}
+              className="tree-menu-select"
+              value={node.dir}
+              onChange={(e) => {
+                const nextDir = e.target.value;
+                if (nextDir !== node.dir) props.onMoveFile(node.id, nextDir);
+                props.onCloseMenu();
+              }}
+            >
+              {buildMoveOptions(node.dir, props.folders).map((dir) => (
+                <option key={dir || '(root)'} value={dir}>
+                  {dir === '' ? 'Notes (root)' : dir}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function buildMoveOptions(currentDir: string, folders: string[]): string[] {
+  const set = new Set<string>();
+  set.add('');
+  for (const dir of folders) set.add(dir);
+  set.add(currentDir ?? '');
+  const list = Array.from(set);
+  list.sort((a, b) => {
+    if (a === b) return 0;
+    if (a === '') return -1;
+    if (b === '') return 1;
+    return a.localeCompare(b);
+  });
+  return list;
 }
 
 function Icon({
